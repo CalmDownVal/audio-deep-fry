@@ -7,8 +7,8 @@ import * as Wave from 'node-wav';
 
 const DEEP_FRY_BITRATE = [ 32, 40, 48, 56, 64 ];
 const DEEP_FRY_ITERATIONS = 50;
-const DEEP_FRY_BOOST = 10.0;
-const DEEP_FRY_CLIP = softClip(10.0);
+const DEEP_FRY_BOOST = 12.0;
+const DEEP_FRY_CLIP = softClip(5.0);
 
 (async () => {
 	if (process.argv.length < 4) {
