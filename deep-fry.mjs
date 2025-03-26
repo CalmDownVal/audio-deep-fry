@@ -223,10 +223,6 @@ function clamp(sample) {
 	return Math.min(Math.max(sample, -1.0), 1.0);
 }
 
-function sqr(sample) {
-	return sample * sample;
-}
-
 function choose(options) {
 	return options[Math.floor(Math.random() * options.length)];
 }
