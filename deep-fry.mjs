@@ -9,6 +9,7 @@ const DEEP_FRY_BITRATE = [ 32, 40, 48, 56, 64 ];
 const DEEP_FRY_ITERATIONS = 50;
 const DEEP_FRY_BOOST = 12.0;
 const DEEP_FRY_CLIP = softClip(5.0);
+const DEEP_FRY_TRIM = true;
 
 (async () => {
 	if (process.argv.length < 4) {
@@ -49,7 +50,13 @@ const DEEP_FRY_CLIP = softClip(5.0);
 		}
 
 		println();
-		println(`- writing: ${PATH_OUTPUT}`);
+
+		if (DEEP_FRY_TRIM) {
+			println('- trimming');
+			await trimNoise(PATH_TMP_WAVE, PATH_TMP_WAVE);
+		}
+
+		println(`- encoding: ${PATH_OUTPUT}`);
 		await encodeMpeg(PATH_TMP_WAVE, PATH_OUTPUT);
 	}
 	catch (ex) {
@@ -113,6 +120,66 @@ function convertToMono(pathSrc, pathDst) {
 	});
 }
 
+function trimNoise(pathSrc, pathDst) {
+	return processWave(pathSrc, pathDst, channels => {
+		const channel = channels[0];
+		const sampleCount = channel.length;
+
+		const integratorWindow = 16;
+		const averageWindow = 256;
+		const lowThreshold = 0.4;
+		const highThreshold = 0.7;
+
+		let trimStart = sampleCount;
+		let trimEnd = 0;
+		let isNoise = true;
+
+		let i = 0;
+		let sum0 = 0.0;
+		let sum1 = 0.0;
+		let prev = 0.0;
+		let next;
+		let pastPrev;
+		let pastNext;
+		let avg;
+
+		for (; i < sampleCount; i += 1) {
+			next = channel[i];
+			sum0 += Math.abs(next);
+			sum1 += Math.abs(next - prev);
+			prev = next;
+
+			if (i <= integratorWindow) {
+				continue;
+			}
+
+			pastPrev = channel[i - integratorWindow - 1];
+			pastNext = channel[i - integratorWindow];
+			sum0 -= Math.abs(pastNext);
+			sum1 -= Math.abs(pastNext - pastPrev);
+			avg = avg === undefined
+				? sum1 / sum0
+				: (avg * (averageWindow - 1.0) + (sum1 / sum0)) / averageWindow;
+
+			if (isNoise && avg < lowThreshold) {
+				isNoise = false;
+				trimStart = Math.min(trimStart, Math.max(i - averageWindow, 0));
+			}
+
+			if (!isNoise && avg > highThreshold) {
+				isNoise = true;
+				trimEnd = Math.max(trimEnd, i - averageWindow);
+			}
+		}
+
+		if (trimStart < trimEnd) {
+			return [ channel.slice(trimStart, trimEnd) ];
+		}
+
+		return [ channel ];
+	});
+}
+
 async function processWave(pathSrc, pathDst, block) {
 	const bufferSrc = await readFile(pathSrc);
 	const wave = Wave.decode(bufferSrc);
@@ -154,6 +221,10 @@ async function tryUnlink(path) {
 
 function clamp(sample) {
 	return Math.min(Math.max(sample, -1.0), 1.0);
+}
+
+function sqr(sample) {
+	return sample * sample;
 }
 
 function choose(options) {
